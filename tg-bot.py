@@ -1,7 +1,11 @@
-import webbrowser
 import pygame
+
+
 import telebot
+
+
 from telebot import types
+
 
 bot = telebot.TeleBot('6204607117:AAHbJAytVVF8pYg-ocNwN_gUP5Ewono-ogs')
 
@@ -28,8 +32,6 @@ def main(message):
 @bot.message_handler(commands=['help'])
 def help_main(message):
     markup = types.InlineKeyboardMarkup()
-    # markup.add(types.InlineKeyboardButton('Установить изображение', callback_data='set_image'))
-    # markup.add(types.InlineKeyboardButton('Установить мелодию', callback_data='set_audio'))
     markup.add(types.InlineKeyboardButton('Установить время срабатывания будильника', callback_data='set_time'))
     btn1 = types.InlineKeyboardButton('Включить "Рассвет"', callback_data='dawn_on')
     btn2 = types.InlineKeyboardButton('Отключить "Рассвет"', callback_data='dawn_off')
@@ -53,6 +55,9 @@ def set_time(message):
 
 @bot.message_handler(commands=['set_main_music'])
 def set_main_music(message):
+    global download_music
+    bot.send_message(message.chat.id, 'Вы установили мелодию по-умолчанию.')
+    download_music = ''
     pygame.mixer.music.load('alarm.mp3')
 
 
@@ -99,17 +104,24 @@ def get_file(message):
     markup.row(btn1, btn2)
     try:
         if message.content_type == 'audio':  # mp3
-            print(message.audio)
+
 
             file_info = bot.get_file(message.audio.file_id)
             downloaded_file = bot.download_file(file_info.file_path)
 
             src = message.audio.file_name
+            if src == main_music:
+                raise TypeError
+            if src == download_music:
+                raise NameError
             with open(src, 'wb') as new_file:
                 new_file.write(downloaded_file)
             download_music = src
             bot.reply_to(message, f"Установить мелодию {src[:-4]}?", reply_markup=markup)
-
+    except TypeError:
+        bot.reply_to(message, 'Измените название мелодии на другое и попробуйте снова.')
+    except NameError:
+        bot.reply_to(message, 'Мелодия уже установлена.')
     except Exception as e:
         bot.reply_to(message, str(e))
 
@@ -118,10 +130,12 @@ def get_file(message):
 def check_callback_data(callback):
     global download_music
     if callback.data == 'yes':
-        bot.send_message(callback.message.chat.id, f'Вы установили мелодию {download_music[:-4]}.')
-        confirm(download_music)
+        confirm(download_music, callback.message.chat.id)
+        bot.delete_message(callback.message.chat.id, callback.message.id)
     if callback.data == 'no':
         bot.send_message(callback.message.chat.id, f'Отменено.')
+        download_music = ''
+        bot.delete_message(callback.message.chat.id, callback.message.id)
     if callback.data == 'set_time':
         set_time(callback.message)
     if callback.data == 'dawn_on':
@@ -130,8 +144,12 @@ def check_callback_data(callback):
         dawn_false(callback.message)
 
 
-def confirm(file):
-    pygame.mixer.music.load(file)
+def confirm(file, id):
+    try:
+        pygame.mixer.music.load(file)
+        bot.send_message(id, f'Вы установили мелодию {download_music[:-4]}.')
+    except Exception:
+        bot.send_message(id, 'Неправильный формат файла, попробуйте другой')
 
 
 @bot.message_handler(commands=['dawn_off'])
